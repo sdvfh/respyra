@@ -25,3 +25,4 @@ for i, line in posts.iterrows():
         response = completion.choices[0].message.content
         posts.loc[i, "chatgpt"] = response
         posts.to_csv(path["data"] / "full.csv", index=False)
+        print(f"{i+1}/{len(posts)}")
