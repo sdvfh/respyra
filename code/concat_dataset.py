@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from utils import path
 
@@ -25,6 +24,8 @@ pos_label["classification"] = 1
 neg_label["classification"] = 0
 
 posts = pd.concat([pos_label, neg_label])
-posts["chatgpt"] = np.nan
+posts = posts.sample(frac=1, random_state=42).reset_index(drop=True)
 
 posts.to_csv(path["data"] / "full.csv", index=False)
+
+(path["data"] / "chatgpt_completions").mkdir(exist_ok=True)

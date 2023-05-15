@@ -1,3 +1,5 @@
+import time
+
 import openai
 import pandas as pd
 from utils import openai_api_key, path
@@ -14,15 +16,23 @@ incomplete_prompt = (
 model = "gpt-3.5-turbo"
 
 posts = pd.read_csv(path["data"] / "full.csv")
+
 for i, line in posts.iterrows():
-    if not isinstance(line["chatgpt"], str):
+    chatgpt_completion = path["data"] / "chatgpt_completions" / f"{i}.txt"
+    if not chatgpt_completion.exists():
         prompt = incomplete_prompt.format(sentence=line["sentence"])
-        completion = openai.ChatCompletion.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-        )
+        while True:
+            try:
+                completion = openai.ChatCompletion.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                )
+                break
+            except openai.error.RateLimitError:
+                print("Rate limit error, waiting 10 seconds...")
+                time.sleep(10)
+
         response = completion.choices[0].message.content
-        posts.loc[i, "chatgpt"] = response
-        posts.to_csv(path["data"] / "full.csv", index=False)
+        chatgpt_completion.write_text(response)
         print(f"{i+1}/{len(posts)} | {(i+1)/len(posts)*100:.2f}%")
