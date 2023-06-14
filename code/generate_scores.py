@@ -4,7 +4,6 @@ import random
 import numpy as np
 import pandas as pd
 import torch
-from joblib import Parallel, delayed
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from utils import path
 
@@ -20,42 +19,8 @@ def seed_everything(seed: int):
     return
 
 
-def make_score(i, line, all_hypothesis):
-    scores_path = path["data"] / "scores" / f"{i}.json"
-    if scores_path.exists():
-        return
-    nli_model = AutoModelForSequenceClassification.from_pretrained(
-        "facebook/bart-large-mnli", device=0
-    )
-    tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-mnli", device=0)
-    scores = pd.Series(name=i, dtype=float)
-    for actual_hypothesis, name_column in all_hypothesis:
-        text_to_classify = line[name_column]
-        for hypothesis_template, candidate_labels in actual_hypothesis:
-            for label in candidate_labels:
-                hypothesis = hypothesis_template.format(label=label)
-
-                x = tokenizer.encode(
-                    text_to_classify,
-                    hypothesis,
-                    return_tensors="pt",
-                    truncation="only_first",
-                )
-
-                logits = nli_model(x)[0]
-
-                entail_contradiction_logits = logits[:, [0, 2]]
-                probs = entail_contradiction_logits.softmax(dim=1)
-                prob_label_is_true = probs[:, 1].item()
-                scores[f"score_{name_column}_{label}"] = prob_label_is_true
-    scores.to_json(scores_path)
-    print(f"Finished {i} out of {len(posts)}")
-    return
-
-
 seed_everything(666)
 
-# posts = pd.read_csv(path["data"] / "full_with_suggestions.csv")
 posts = pd.read_parquet(
     path["data"] / "full_with_suggestions_with_scores.snappy.parquet"
 )
@@ -125,6 +90,40 @@ all_hypothesis = [
     [all_hypothesis_post, "sentence"],
 ]
 
-Parallel(n_jobs=4, backend="threading")(
-    delayed(make_score)(i, line, all_hypothesis) for i, line in posts.iterrows()
-)
+nli_model = AutoModelForSequenceClassification.from_pretrained(
+    "facebook/bart-large-mnli", device="cuda"
+).to("cuda")
+tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-mnli", device="cuda")
+
+for i, line in posts.iterrows():
+    scores_path = path["data"] / "scores" / f"{i}.json"
+    if scores_path.exists():
+        continue
+
+    scores = pd.Series(name=i, dtype=float)
+    for actual_hypothesis, name_column in all_hypothesis:
+        text_to_classify = line[name_column]
+        for hypothesis_template, candidate_labels in actual_hypothesis:
+            for label in candidate_labels:
+                hypothesis = hypothesis_template.format(label=label)
+
+                try:
+                    x = tokenizer.encode(
+                        text_to_classify,
+                        hypothesis,
+                        return_tensors="pt",
+                        truncation="only_first",
+                    ).to("cuda")
+                except TypeError:
+                    scores_path.touch()
+                    print(f"Error in {i}")
+                    break
+
+                logits = nli_model(x)[0]
+
+                entail_contradiction_logits = logits[:, [0, 2]]
+                probs = entail_contradiction_logits.softmax(dim=1)
+                prob_label_is_true = probs[:, 1].item()
+                scores[f"score_{name_column}_{label}"] = prob_label_is_true
+    scores.to_json(scores_path)
+    print(f"Finished {i} out of {len(posts)}")
