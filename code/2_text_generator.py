@@ -67,6 +67,6 @@ incomplete_prompt = (
 
 model = "gpt-3.5-turbo"
 
-posts = pd.read_csv(path["data"] / "full.csv")
+posts = pd.read_parquet(path["data"] / "full.snappy.parquet")
 
 Parallel(n_jobs=100)(delayed(make_completion)(i, line) for i, line in posts.iterrows())

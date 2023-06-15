@@ -26,6 +26,6 @@ neg_label["classification"] = 0
 posts = pd.concat([pos_label, neg_label])
 posts = posts.sample(frac=1, random_state=42).reset_index(drop=True)
 
-posts.to_csv(path["data"] / "full.csv", index=False)
+posts.to_parquet(path["data"] / "full.snappy.parquet")
 
 (path["data"] / "chatgpt_completions").mkdir(exist_ok=True)
