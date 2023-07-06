@@ -21,10 +21,7 @@ def seed_everything(seed: int):
 
 seed_everything(666)
 
-posts = pd.read_parquet(
-    path["data"] / "full_with_suggestions_with_scores.snappy.parquet"
-)
-posts = posts[posts["score_completion_anxious mood"].isnull()]
+posts = pd.read_parquet(path["data"] / "full_with_suggestions.snappy.parquet")
 
 symptoms = [
     "anxious mood",
